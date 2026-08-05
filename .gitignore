@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Docker volumes
+pgdata/
+uploads/
+
+# Test coverage
+coverage/
+
+# Transformers.js model cache (downloaded at runtime)
+frontend/public/models/
+.wcache/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/

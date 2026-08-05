@@ -1,0 +1,72 @@
+# ============================================================
+# Zero-Knowledge Cloud Storage — Docker Compose
+# Orchestrates PostgreSQL (pgvector), Backend API, Frontend
+# ============================================================
+version: "3.9"
+
+services:
+  # ─────────────────────────────────────────────────────────
+  # PostgreSQL with pgvector extension for vector similarity
+  # ─────────────────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: zk_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-zk_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
+      POSTGRES_DB: ${POSTGRES_DB:-zk_storage}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/src/database/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-zk_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────
+  # Backend API — Node.js + Express + TypeScript
+  # ─────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: zk_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-zk_user}:${POSTGRES_PASSWORD:-change_me_in_production}@postgres:5432/${POSTGRES_DB:-zk_storage}
+      JWT_SECRET: ${JWT_SECRET:-please_change_this_secret_in_production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-please_change_this_refresh_secret}
+      STORAGE_DRIVER: local
+      STORAGE_PATH: /app/uploads
+      CORS_ORIGIN: http://localhost:5173,http://localhost:3000
+    ports:
+      - "${BACKEND_PORT:-4000}:4000"
+    volumes:
+      - uploads:/app/uploads
+
+  # ─────────────────────────────────────────────────────────
+  # Frontend — React + Vite (served by Nginx in production)
+  # ─────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: zk_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+
+volumes:
+  pgdata:
+  uploads:
