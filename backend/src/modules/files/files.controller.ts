@@ -60,9 +60,10 @@ export async function upload(req: Request, res: Response, next: NextFunction): P
 /** GET /files */
 export async function list(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { page, limit, sort, order } = req.query as {
+    const query = req.query as unknown as {
       page: number; limit: number; sort: string; order: string;
     };
+    const { page, limit, sort, order } = query;
     const result = await listFiles(req.user!.id, page, limit, sort, order);
 
     res.json({

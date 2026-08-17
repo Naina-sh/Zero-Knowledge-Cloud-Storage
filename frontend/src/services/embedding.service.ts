@@ -2,111 +2,66 @@
  * Embedding service — generates semantic embeddings using Transformers.js.
  *
  * The sentence-transformer model (all-MiniLM-L6-v2) runs ENTIRELY in the browser
- * via WebAssembly inside a Web Worker. The server never sees the source text —
- * only the resulting 384-dimensional embedding vector.
+ * via WebAssembly. The server never sees the source text — only the resulting
+ * 384-dimensional embedding vector.
  *
- * The model runs in a Web Worker (not the main thread) because onnxruntime-web
- * requires a clean worker context to initialize correctly under Vite.
+ * NOTE: This runs directly in the main thread (no Web Worker). onnxruntime-web
+ * is pre-bundled by Vite via `optimizeDeps.include`, which avoids both the
+ * "registerBackend" error and the dev-server issue where Vite serves index.html
+ * for a worker module URL.
  *
  * @module services/embedding.service
  */
 
+import { pipeline, env } from '@xenova/transformers';
 import { config } from '../config';
 
-// ─── Worker management ────────────────────────────────────────
+// In a bundler/dev-server context (Vite), transformers.js defaults to first checking
+// for a LOCAL model at '/models/<model>/config.json'. Vite's SPA fallback serves
+// index.html (status 200) for that URL, and JSON.parse of the HTML throws
+// "Unexpected token '<'" — killing the upload pipeline at the embedding step.
+// Disable the local-model check so model files load directly from the HF hub.
+env.allowLocalModels = false;
 
-let worker: Worker | null = null;
+// Self-host the onnxruntime-web wasm files (copied to /public/ort/ during setup)
+// so inference doesn't depend on a CDN and the wasm backend loads reliably.
+if (env?.backends?.onnx?.wasm) {
+  env.backends.onnx.wasm.wasmPaths = '/ort/';
+}
+
+// The very first run (before allowLocalModels was disabled) may have cached
+// Vite's SPA-fallback index.html (served with status 200 for the nonexistent
+// '/models/<model>/config.json') into transformers.js' browser cache
+// ('transformers-cache'). hub.js checks that cache under the local path key
+// BEFORE consulting allowLocalModels, so the poisoned HTML entry would be
+// returned forever. Purge any '/models/...' entries once per session —
+// legitimate model files are cached under absolute https://huggingface.co URLs
+// and are NOT affected.
+let cachePurged = false;
+async function purgePoisonedModelCache(): Promise<void> {
+  if (cachePurged || typeof caches === 'undefined') return;
+  cachePurged = true;
+  try {
+    const cache = await caches.open('transformers-cache');
+    const keys = await cache.keys();
+    await Promise.all(
+      keys
+        .filter((req) => new URL(req.url).pathname.startsWith('/models/'))
+        .map((req) => cache.delete(req))
+    );
+  } catch {
+    // Cache unavailable (e.g., incognito/iframe restrictions) — safe to ignore;
+    // transformers.js falls back to downloading without cache.
+  }
+}
+
+// Type for the feature-extraction pipeline callable
+type EmbedFn = (text: string, options: Record<string, unknown>) => Promise<{ data: Float32Array | number[] }>;
+
+// Singleton pipeline instance (loaded once, reused)
+let extractor: EmbedFn | null = null;
+let loadingPromise: Promise<EmbedFn> | null = null;
 let modelReady = false;
-let messageId = 0;
-
-// Pending promise resolvers keyed by message id
-const pending = new Map<
-  number,
-  { resolve: (value: unknown) => void; reject: (err: Error) => void }
->();
-
-// Progress listeners (for model loading UI)
-const progressListeners = new Set<(progress: { progress: number; loaded: boolean }) => void>();
-
-/**
- * Lazily create the embedding web worker (singleton).
- */
-function getWorker(): Worker {
-  if (worker) return worker;
-
-  // Vite-native worker construction — bundles the worker with the app
-  worker = new Worker(new URL('./embedding.worker.ts', import.meta.url), {
-    type: 'module',
-  });
-
-  worker.addEventListener('message', (event: MessageEvent) => {
-    const msg = event.data as {
-      id?: number;
-      type: string;
-      embedding?: number[];
-      error?: string;
-      data?: { progress: number; status: string };
-    };
-
-    // Progress / ready events (no id — broadcast)
-    if (msg.type === 'progress' && msg.data) {
-      const d = msg.data;
-      if (d.status === 'progress') {
-        progressListeners.forEach((cb) => cb({ progress: d.progress, loaded: false }));
-      } else if (d.status === 'ready') {
-        progressListeners.forEach((cb) => cb({ progress: 100, loaded: true }));
-      }
-      return;
-    }
-
-    if (msg.type === 'ready') {
-      modelReady = true;
-      progressListeners.forEach((cb) => cb({ progress: 100, loaded: true }));
-      return;
-    }
-
-    // Response to a specific request (has id)
-    if (msg.id !== undefined && pending.has(msg.id)) {
-      const { resolve, reject } = pending.get(msg.id)!;
-      pending.delete(msg.id);
-
-      if (msg.type === 'error') {
-        reject(new Error(msg.error ?? 'Worker error'));
-      } else if (msg.type === 'result' && msg.embedding) {
-        resolve(msg.embedding);
-      } else {
-        // 'loaded' or other ack
-        resolve(undefined);
-      }
-    }
-  });
-
-  worker.addEventListener('error', (err) => {
-    // Reject all pending promises if the worker crashes
-    pending.forEach(({ reject }) => reject(new Error(err.message || 'Worker error')));
-    pending.clear();
-  });
-
-  return worker;
-}
-
-/**
- * Send a message to the worker and await its response.
- */
-function postToWorker<T>(type: string, text?: string): Promise<T> {
-  const w = getWorker();
-  const id = ++messageId;
-
-  return new Promise<T>((resolve, reject) => {
-    pending.set(id, {
-      resolve: resolve as (value: unknown) => void,
-      reject,
-    });
-    w.postMessage({ id, type, text });
-  });
-}
-
-// ─── Public API (unchanged from original) ─────────────────────
 
 /**
  * Load the embedding model (singleton — loaded once, reused).
@@ -116,23 +71,34 @@ function postToWorker<T>(type: string, text?: string): Promise<T> {
 export async function loadEmbeddingModel(
   onProgress?: (progress: { progress: number; loaded: boolean }) => void
 ): Promise<void> {
-  if (onProgress) {
-    progressListeners.add(onProgress);
-  }
-
-  // If already ready, immediately notify
-  if (modelReady) {
-    onProgress?.({ progress: 100, loaded: true });
-    if (onProgress) progressListeners.delete(onProgress);
+  if (extractor) return;
+  if (loadingPromise) {
+    await loadingPromise;
     return;
   }
 
-  // Trigger load in the worker
-  await postToWorker('load');
+  // Remove any cached index.html entries (see purgePoisonedModelCache) before
+  // transformers.js consults its cache for model files.
+  await purgePoisonedModelCache();
 
-  if (onProgress) {
-    progressListeners.delete(onProgress);
-  }
+  loadingPromise = pipeline('feature-extraction', config.embedding.model, {
+    quantized: true,
+    progress_callback: (data: unknown) => {
+      if (onProgress && typeof data === 'object' && data !== null && 'progress' in data) {
+        const d = data as { progress: number; status: string };
+        if (d.status === 'progress') {
+          onProgress({ progress: d.progress, loaded: false });
+        } else if (d.status === 'ready') {
+          onProgress({ progress: 100, loaded: true });
+        }
+      }
+    },
+  }) as unknown as Promise<EmbedFn>;
+
+  extractor = await loadingPromise;
+  loadingPromise = null;
+  modelReady = true;
+  onProgress?.({ progress: 100, loaded: true });
 }
 
 /**
@@ -150,11 +116,24 @@ export function isModelLoaded(): boolean {
  * @returns Float32Array of 384 dimensions
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
-  const embedding = await postToWorker<number[]>('embed', text);
+  if (!extractor) {
+    await loadEmbeddingModel();
+  }
+  const model = extractor!;
 
-  if (!Array.isArray(embedding) || embedding.length !== config.embedding.dimensions) {
+  // Truncate to avoid exceeding model max length (256 tokens for MiniLM)
+  const truncated = text.slice(0, 8000);
+
+  const output = await model(truncated, {
+    pooling: 'mean',
+    normalize: true,
+  });
+
+  const embedding = Array.from(output.data);
+
+  if (embedding.length !== config.embedding.dimensions) {
     throw new Error(
-      `Embedding dimension mismatch: expected ${config.embedding.dimensions}, got ${embedding?.length ?? 0}`
+      `Embedding dimension mismatch: expected ${config.embedding.dimensions}, got ${embedding.length}`
     );
   }
 

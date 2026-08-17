@@ -21,12 +21,13 @@ export function getAccessToken(): string | null {
 /**
  * Create the Axios instance with base configuration.
  * withCredentials: true — sends the refresh token cookie automatically.
+ * No global Content-Type is forced — axios sets it based on the request body
+ * (application/json for objects, multipart/form-data + boundary for FormData).
  */
 const api: AxiosInstance = axios.create({
   baseURL: config.api.baseUrl,
   withCredentials: true,
   timeout: 30000,
-  headers: { 'Content-Type': 'application/json' },
 });
 
 // ─── Request interceptor — attach access token ───

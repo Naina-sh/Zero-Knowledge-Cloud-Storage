@@ -73,9 +73,7 @@ export async function uploadFile(
   formData.append('mimeType', encryptedMime);
   formData.append('mimeIv', mimeIv);
 
-  const response = await api.post<ApiResponse<FileDTO>>('/files/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  const response = await api.post<ApiResponse<FileDTO>>('/files/upload', formData);
 
   onProgress?.(100, 'Done');
   return response.data.data!;

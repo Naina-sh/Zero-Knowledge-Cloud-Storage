@@ -19,11 +19,16 @@ export default defineConfig({
       },
     },
   },
-  // Transformers.js + onnxruntime-web run inside a Web Worker.
-  // They must be excluded from Vite's dependency pre-bundling so the
-  // worker can resolve them in its own clean context.
+  // @xenova/transformers is imported inside the embedding Web Worker.
+  // The worker itself must be excluded from dependency pre-bundling so the
+  // library resolves in a clean worker context. BUT onnxruntime-web must be
+  // PRE-BUNDLED by Vite (rather than excluded) so that its `browser` entry
+  // (dist/ort-web.min.js, a self-contained prebuilt bundle) is converted into
+  // proper ESM — otherwise re-bundling ORT's CommonJS entry triggers the
+  // "registerBackend" error at runtime.
   optimizeDeps: {
-    exclude: ['@xenova/transformers', 'onnxruntime-web'],
+    exclude: ['@xenova/transformers'],
+    include: ['onnxruntime-web', 'onnxruntime-common'],
   },
   // Web Worker configuration — use ES module format for the embedding worker
   worker: {

@@ -5,7 +5,7 @@
 
 export const config = {
   api: {
-    baseUrl: import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api',
+    baseUrl: import.meta.env.VITE_API_URL?.trim() || '/api',
   },
   embedding: {
     model: import.meta.env.VITE_EMBEDDING_MODEL ?? 'Xenova/all-MiniLM-L6-v2',

@@ -63,10 +63,12 @@ export async function uploadFile(input: UploadFileInput): Promise<FileRecord> {
     );
 
     // Insert embedding (pgvector stores the vector)
+    // pg serializes JS arrays as Postgres array literals {"a","b"}, which pgvector
+    // rejects. pgvector expects a vector literal string '[a,b,c]' (see search.service.ts).
     await client.query(
       `INSERT INTO embeddings (file_id, user_id, vector, model)
-       VALUES ($1, $2, $3, 'all-MiniLM-L6-v2')`,
-      [fileId, input.userId, input.embedding]
+       VALUES ($1, $2, $3::vector, 'all-MiniLM-L6-v2')`,
+      [fileId, input.userId, `[${input.embedding.join(',')}]`]
     );
 
     await client.query('COMMIT');

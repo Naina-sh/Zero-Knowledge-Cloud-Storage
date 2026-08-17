@@ -29,6 +29,10 @@ export async function semanticSearch(input: SearchInput): Promise<SearchResult[]
 
   // pgvector query: find nearest embeddings for this user, above threshold
   // 1 - (vector <=> query) = cosine similarity score
+  // pgvector expects a vector literal string '[a,b,c]' — pg serializes JS arrays
+  // as Postgres array literals {"a","b"}, which pgvector rejects.
+  const vectorLiteral = `[${queryEmbedding.join(',')}]`;
+
   const rows = await query<{
     file_id: string;
     encrypted_name: string;
@@ -48,7 +52,7 @@ export async function semanticSearch(input: SearchInput): Promise<SearchResult[]
        AND 1 - (e.vector <=> $1::vector) >= $3
      ORDER BY e.vector <=> $1::vector
      LIMIT $4`,
-    [queryEmbedding, userId, threshold, topK]
+    [vectorLiteral, userId, threshold, topK]
   );
 
   const results: SearchResult[] = rows.map((r) => ({

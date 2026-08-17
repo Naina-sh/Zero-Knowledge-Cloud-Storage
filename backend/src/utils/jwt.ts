@@ -3,7 +3,7 @@
  * @module utils/jwt
  */
 
-import jwt from 'jsonwebtoken';
+import jwt, { type SignOptions } from 'jsonwebtoken';
 import crypto from 'crypto';
 import { env } from '../config/env';
 import type { JwtPayload } from '../types';
@@ -16,7 +16,7 @@ export function signAccessToken(payload: { userId: string; email: string }): str
   return jwt.sign(
     { userId: payload.userId, email: payload.email, type: 'access' } satisfies JwtPayload,
     env.jwt.secret,
-    { expiresIn: env.jwt.accessExpiry }
+    { expiresIn: env.jwt.accessExpiry as SignOptions['expiresIn'] }
   );
 }
 
@@ -27,7 +27,7 @@ export function signRefreshToken(payload: { userId: string; email: string }): st
   return jwt.sign(
     { userId: payload.userId, email: payload.email, type: 'refresh' } satisfies JwtPayload,
     env.jwt.refreshSecret,
-    { expiresIn: env.jwt.refreshExpiry }
+    { expiresIn: env.jwt.refreshExpiry as SignOptions['expiresIn'] }
   );
 }
 
