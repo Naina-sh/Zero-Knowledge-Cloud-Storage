@@ -87,6 +87,8 @@ Himanshu_project/
 ## 🔐 How Zero-Knowledge Works
 
 ```
+<img width="1024" height="559" alt="image" src="https://github.com/user-attachments/assets/813754f0-2ee5-4cc8-ba24-8a84c333d0a5" />
+
 ┌────────────────────────── CLIENT (Browser) ──────────────────────────┐
 │  Password ──PBKDF2(600k)──▶ masterKey                                 │
 │                                 │                                     │
