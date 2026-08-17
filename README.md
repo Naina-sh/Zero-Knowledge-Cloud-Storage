@@ -9,26 +9,43 @@ Semantic search is powered by **sentence-transformer embeddings generated entire
 ## ✨ Features
 
 ### Security (Zero-Knowledge Architecture)
-- 🔒 Client-side **AES-256-GCM** encryption
-- 🔑 Keys derived locally from password via **PBKDF2** (600,000 iterations)
-- 🧂 Per-user random salts; key separation (auth key ≠ encryption key)
-- 🚫 Server never receives: plaintext files, passwords, encryption keys, decrypted content, or plaintext search queries
-- 📛 Filenames and metadata are encrypted — true zero-knowledge
-- 🛡️ JWT authentication with access + refresh token rotation
-- ⚙️ Helmet, CORS, rate limiting, input validation (Zod)
+
+* 🔒 Client-side **AES-256-GCM** encryption
+* 🔑 Keys derived locally from password via **PBKDF2** (600,000 iterations)
+* 🧂 Per-user random salts; key separation (auth key ≠ encryption key)
+* 🚫 Server never receives: plaintext files, passwords, encryption keys, decrypted content, or plaintext search queries
+* 📛 Filenames and metadata are encrypted — true zero-knowledge
+* 🛡️ JWT authentication with access + refresh token rotation
+* ⚙️ Helmet, CORS, rate limiting, input validation (Zod)
 
 ### AI / Semantic Search
+
+* 🧠 Sentence-transformer embeddings (`all-MiniLM-L6-v2`) generated **in the browser** via Transformers.js
+* 🔍 Semantic vector similarity search using **pgvector**
+* 📄 Document text extraction (PDF, DOCX, TXT) — all client-side
+* 🎯 Search queries embedded locally; server only sees the query vector
+
 ### Backend
-- 🧩 Clean modular architecture (auth, files, embeddings, search, storage, users)
-- 📝 Structured logging (Winston)
-- 🛠️ Centralized error handling
-- ✅ Request validation (Zod schemas)
+
+* 🧩 Clean modular architecture (auth, files, embeddings, search, storage, users)
+* 📝 Structured logging (Winston)
+* 🛠️ Centralized error handling
+* ✅ Request validation (Zod schemas)
+
+### Frontend
+
+* 🎨 Modern UI inspired by Google Drive & Notion
+* 📱 Responsive layout with dark mode
+* 🖱️ Drag-and-drop file uploads
+* 📈 Storage analytics dashboard
+* 🔔 Toast notifications & progress bars
+* 🎬 Smooth animations (Framer Motion)
 
 ---
 
 ## 📁 Project Structure
 
-```
+```text
 Himanshu_project/
 ├── README.md
 ├── ARCHITECTURE.md
@@ -76,21 +93,44 @@ Himanshu_project/
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js ≥ 20
-- Docker & Docker Compose
+
+* Node.js ≥ 20
+* Docker & Docker Compose
 
 ### Docker (Recommended)
 
 ```bash
+git clone <repo-url> Himanshu_project
+cd Himanshu_project
+cp .env.example .env
+docker-compose up --build
+```
+
+* **Frontend:** `http://localhost:5173`
+* **Backend:** `http://localhost:4000`
+
+### Local Development
+
+```bash
+docker-compose up -d postgres
+
+# Backend
+cd backend && cp .env.example .env && npm install
+npm run db:migrate && npm run dev
+
+# Frontend (new terminal)
+cd frontend && cp .env.example .env && npm install && npm run dev
+```
+
 ---
 
 ## 🔐 How Zero-Knowledge Works
 
-```
 <img width="1024" height="559" alt="image" src="https://github.com/user-attachments/assets/813754f0-2ee5-4cc8-ba24-8a84c333d0a5" />
 
+```text
 ┌────────────────────────── CLIENT (Browser) ──────────────────────────┐
-│  Password ──PBKDF2(600k)──▶ masterKey                                 │
+│  Password ──PBKDF2(600k)──▶ masterKey                               │
 │                                 │                                     │
 │                    ┌────────────┴────────────┐                        │
 │                    ▼                          ▼                        │
@@ -112,37 +152,41 @@ Himanshu_project/
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
+---
+
 ## 🔐 Key Derivation & Security
 
-| Key | Derived From | Purpose | Sent to Server? |
-|-----|--------------|---------|-----------------|
-| `masterKey` | `PBKDF2(password, salt, 600k)` | Root key derivation | ❌ Never |
-| `authKey` | `HKDF(masterKey, "auth")` | Authentication | ✅ As Argon2 hash |
-| `encKey` | `HKDF(masterKey, "enc")` | File encryption | ❌ Never |
+| Key         | Derived From                   | Purpose             | Sent to Server?  |
+| ----------- | ------------------------------ | ------------------- | ---------------- |
+| `masterKey` | `PBKDF2(password, salt, 600k)` | Root key derivation | ❌ Never          |
+| `authKey`   | `HKDF(masterKey, "auth")`      | Authentication      | ✅ As Argon2 hash |
+| `encKey`    | `HKDF(masterKey, "enc")`       | File encryption     | ❌ Never          |
 
 ### 🔑 Key Security Model
 
-- **`masterKey`** — Derived from the user's password using PBKDF2 with 600,000 iterations. It never leaves the client.
-- **`authKey`** — Derived from `masterKey` using HKDF and used for authentication. Only an Argon2 hash of this key is sent to the server.
-- **`encKey`** — Derived from `masterKey` using HKDF and used for client-side file encryption. It never leaves the client.
+* **`masterKey`** — Derived from the user's password using PBKDF2 with 600,000 iterations. It never leaves the client.
+* **`authKey`** — Derived from `masterKey` using HKDF and used for authentication. Only an Argon2 hash of this key is sent to the server.
+* **`encKey`** — Derived from `masterKey` using HKDF and used for client-side file encryption. It never leaves the client.
 
 ---
 
 ## 📚 Documentation
 
-| Document | Description |
-|----------|-------------|
-| [`ARCHITECTURE.md`](./ARCHITECTURE.md) | System architecture, data flow, and security model |
-| [`API_DOCUMENTATION.md`](./API_DOCUMENTATION.md) | Complete REST API reference |
-| [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md) | Database schema and pgvector setup |
-| [`DEPLOYMENT.md`](./DEPLOYMENT.md) | Production deployment guide |
+| Document                                         | Description                                        |
+| ------------------------------------------------ | -------------------------------------------------- |
+| [`ARCHITECTURE.md`](./ARCHITECTURE.md)           | System architecture, data flow, and security model |
+| [`API_DOCUMENTATION.md`](./API_DOCUMENTATION.md) | Complete REST API reference                        |
+| [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md)     | Database schema and pgvector setup                 |
+| [`DEPLOYMENT.md`](./DEPLOYMENT.md)               | Production deployment guide                        |
+
+---
 
 ## 🛡️ Security Notes
 
-- Reference implementation — conduct a formal security audit before production use.
-- The embedding model is downloaded on first use (~23 MB quantized).
-- TLS/HTTPS is **mandatory** in production to protect the authKey in transit.
-- Refresh tokens are stored in HTTP-only secure cookies.
+* Reference implementation — conduct a formal security audit before production use.
+* The embedding model is downloaded on first use (~23 MB quantized).
+* TLS/HTTPS is **mandatory** in production to protect the authKey in transit.
+* Refresh tokens are stored in HTTP-only secure cookies.
 
 ---
 
@@ -150,37 +194,3 @@ Himanshu_project/
 
 MIT License — see [LICENSE](./LICENSE) for details.
 
-git clone <repo-url> Himanshu_project
-cd Himanshu_project
-cp .env.example .env
-docker-compose up --build
-
-# Frontend:  http://localhost:5173
-# Backend:   http://localhost:4000
-```
-
-### Local Development
-
-```bash
-docker-compose up -d postgres
-
-# Backend
-cd backend && cp .env.example .env && npm install
-npm run db:migrate && npm run dev
-
-# Frontend (new terminal)
-cd frontend && cp .env.example .env && npm install && npm run dev
-```
-
-- 🧠 Sentence-transformer embeddings (`all-MiniLM-L6-v2`) generated **in the browser** via Transformers.js
-- 🔍 Semantic vector similarity search using **pgvector**
-- 📄 Document text extraction (PDF, DOCX, TXT) — all client-side
-- 🎯 Search queries embedded locally; server only sees the query vector
-
-### Frontend
-- 🎨 Modern UI inspired by Google Drive & Notion
-- 📱 Responsive layout with dark mode
-- 🖱️ Drag-and-drop file uploads
-- 📈 Storage analytics dashboard
-- 🔔 Toast notifications & progress bars
-- 🎬 Smooth animations (Framer Motion)
