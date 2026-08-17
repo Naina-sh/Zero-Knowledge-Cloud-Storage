@@ -112,12 +112,19 @@ Himanshu_project/
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
-### Key Separation
+## 🔐 Key Derivation & Security
+
 | Key | Derived From | Purpose | Sent to Server? |
-|-----|-------------|---------|-----------------|
-| `masterKey` | PBKDF2(password, salt, 600k) | Root derivation | ❌ Never |
-| `authKey` | HKDF(masterKey, "auth") | Authentication | ✅ (as Argon2 hash) |
-| `encKey` | HKDF(masterKey, "enc") | File encryption | ❌ Never |
+|-----|--------------|---------|-----------------|
+| `masterKey` | `PBKDF2(password, salt, 600k)` | Root key derivation | ❌ Never |
+| `authKey` | `HKDF(masterKey, "auth")` | Authentication | ✅ As Argon2 hash |
+| `encKey` | `HKDF(masterKey, "enc")` | File encryption | ❌ Never |
+
+### 🔑 Key Security Model
+
+- **`masterKey`** — Derived from the user's password using PBKDF2 with 600,000 iterations. It never leaves the client.
+- **`authKey`** — Derived from `masterKey` using HKDF and used for authentication. Only an Argon2 hash of this key is sent to the server.
+- **`encKey`** — Derived from `masterKey` using HKDF and used for client-side file encryption. It never leaves the client.
 
 ---
 
@@ -125,12 +132,10 @@ Himanshu_project/
 
 | Document | Description |
 |----------|-------------|
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | System architecture, data flow, security model |
-| [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) | Complete REST API reference |
-| [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) | Database schema & pgvector setup |
-| [DEPLOYMENT.md](./DEPLOYMENT.md) | Production deployment guide |
-
----
+| [`ARCHITECTURE.md`](./ARCHITECTURE.md) | System architecture, data flow, and security model |
+| [`API_DOCUMENTATION.md`](./API_DOCUMENTATION.md) | Complete REST API reference |
+| [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md) | Database schema and pgvector setup |
+| [`DEPLOYMENT.md`](./DEPLOYMENT.md) | Production deployment guide |
 
 ## 🛡️ Security Notes
 
