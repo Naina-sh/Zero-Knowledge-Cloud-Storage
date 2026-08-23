@@ -58,6 +58,10 @@ export const env = {
       region: optional('S3_REGION', 'us-east-1'),
       accessKeyId: optional('S3_ACCESS_KEY_ID', ''),
       secretAccessKey: optional('S3_SECRET_ACCESS_KEY', ''),
+      // For S3-compatible providers (e.g. Supabase Storage): custom endpoint URL
+      endpoint: optional('S3_ENDPOINT', ''),
+      // true for most S3-compatible providers (path-style addressing)
+      forcePathStyle: optional('S3_FORCE_PATH_STYLE', 'false') === 'true',
     },
   },
 

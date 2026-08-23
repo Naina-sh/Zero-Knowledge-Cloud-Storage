@@ -7,7 +7,8 @@
 import fs from 'fs';
 import path from 'path';
 import { pipeline } from 'stream/promises';
-import type { Readable } from 'stream';
+import { Readable } from 'stream';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { env } from '../../config/env';
 import { logger } from '../../utils/logger';
 import { InternalError, NotFoundError } from '../../utils/errors';
@@ -90,30 +91,105 @@ class LocalStorage implements StorageBackend {
 
 /**
  * S3-compatible storage backend.
- * Uses AWS SDK only when STORAGE_DRIVER=s3 to avoid unnecessary dependency.
+ * Works with any S3-compatible provider (Supabase Storage, AWS S3, etc.)
+ * — set STORAGE_DRIVER=s3 plus the S3_* environment variables.
  */
 class S3Storage implements StorageBackend {
-  // NOTE: S3 implementation is a stub interface.
-  // In production, install @aws-sdk/client-s3 and implement these methods.
-  // The interface is intentionally identical so swapping requires no code changes.
+  private client: S3Client;
+  private bucket: string;
 
-  async save(_key: string, _data: Buffer): Promise<void> {
-    throw new InternalError('S3 storage backend not configured. Install @aws-sdk/client-s3 and implement S3Storage.');
+  constructor() {
+    if (!env.storage.s3.bucket) {
+      throw new InternalError('STORAGE_DRIVER=s3 requires S3_BUCKET to be set.');
+    }
+
+    this.bucket = env.storage.s3.bucket;
+    this.client = new S3Client({
+      region: env.storage.s3.region,
+      credentials: {
+        accessKeyId: env.storage.s3.accessKeyId,
+        secretAccessKey: env.storage.s3.secretAccessKey,
+      },
+      // Custom endpoint (e.g. Supabase Storage) — enables S3-compatible providers
+      ...(env.storage.s3.endpoint ? { endpoint: env.storage.s3.endpoint } : {}),
+      ...(env.storage.s3.forcePathStyle ? { forcePathStyle: true } : {}),
+    });
+
+    logger.info(
+      `S3 storage backend configured (bucket: ${this.bucket}, endpoint: ${env.storage.s3.endpoint || 'default AWS'})`
+    );
   }
-  async saveStream(_key: string, _stream: Readable): Promise<void> {
-    throw new InternalError('S3 storage backend not configured.');
+
+  async save(key: string, data: Buffer): Promise<void> {
+    await this.client.send(
+      new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: data })
+    );
   }
-  async read(_key: string): Promise<Buffer> {
-    throw new InternalError('S3 storage backend not configured.');
+
+  async saveStream(key: string, stream: Readable): Promise<void> {
+    await this.client.send(
+      new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: stream })
+    );
   }
-  createReadStream(_key: string): Readable {
-    throw new InternalError('S3 storage backend not configured.');
+
+  async read(key: string): Promise<Buffer> {
+    try {
+      const res = await this.client.send(
+        new GetObjectCommand({ Bucket: this.bucket, Key: key })
+      );
+      // S3 Body is a Readable stream — collect it into a Buffer
+      const chunks: Buffer[] = [];
+      for await (const chunk of res.Body as Readable) {
+        chunks.push(Buffer.from(chunk as Buffer));
+      }
+      return Buffer.concat(chunks);
+    } catch (err) {
+      throw new NotFoundError('File');
+    }
   }
-  async delete(_key: string): Promise<void> {
-    throw new InternalError('S3 storage backend not configured.');
+
+  createReadStream(key: string): Readable {
+    // Express send()'s the buffer, so read() covers the download path.
+    // For streaming, return a lazy stream that fetches on demand.
+    const client = this.client;
+    const bucket = this.bucket;
+    return new Readable({
+      async read() {
+        try {
+          const res = await client.send(
+            new GetObjectCommand({ Bucket: bucket, Key: key })
+          );
+          for await (const chunk of res.Body as Readable) {
+            this.push(chunk);
+          }
+          this.push(null);
+        } catch {
+          this.destroy(new NotFoundError('File data in storage'));
+        }
+      },
+    });
   }
-  async exists(_key: string): Promise<boolean> {
-    throw new InternalError('S3 storage backend not configured.');
+
+  async delete(key: string): Promise<void> {
+    try {
+      await this.client.send(
+        new DeleteObjectCommand({ Bucket: this.bucket, Key: key })
+      );
+    } catch (err) {
+      // Idempotent — don't fail if file doesn't exist
+      logger.warn(`S3 delete failed for ${key}: ${err}`);
+    }
+  }
+
+  async exists(key: string): Promise<boolean> {
+    try {
+      await this.client.send(
+        new HeadObjectCommand({ Bucket: this.bucket, Key: key })
+      );
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 

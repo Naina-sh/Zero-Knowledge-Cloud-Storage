@@ -23,7 +23,13 @@ export function getPool(): Pool {
     connectionString: env.database.url,
     max: 20,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000,
+    connectionTimeoutMillis: 10000,
+    // Managed providers (Neon, Render, Heroku…) serve Postgres over TLS.
+    // Localhost connections are unaffected — pg uses TLS only when the
+    // connection string contains sslmode=require, or when the host isn't local.
+    ssl: /sslmode=require/.test(env.database.url)
+      ? { rejectUnauthorized: false }
+      : undefined,
   });
 
   // Register pgvector types on each new client connection
