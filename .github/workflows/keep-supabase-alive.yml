@@ -21,8 +21,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Read-only Supabase keepalive query
+        env:
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           curl -fsS --max-time 30 \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
             "https://ccjywaavkfueaxefkbez.supabase.co/rest/v1/keepalive?id=eq.1&select=id"
