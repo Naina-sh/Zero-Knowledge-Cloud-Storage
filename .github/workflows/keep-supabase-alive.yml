@@ -1,0 +1,28 @@
+name: Keep Supabase Alive
+
+# Performs ONE minimal, read-only REST query per day against the Zero-cloud
+# Supabase project's dedicated public.keepalive table so the free-tier project
+# is not paused for inactivity.
+#
+# - Uses ONLY the anon/public key (stored as the SUPABASE_ANON_KEY repo secret).
+# - The service_role key is NEVER used.
+# - No sensitive data is queried (keepalive contains only id + note).
+# - Read-only GET; no inserts, updates, or deletes.
+
+on:
+  schedule:
+    # Once per day at 06:00 UTC
+    - cron: '0 6 * * *'
+  # Allow manual runs from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read-only Supabase keepalive query
+        run: |
+          curl -fsS --max-time 30 \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            "https://ccjywaavkfueaxefkbez.supabase.co/rest/v1/keepalive?id=eq.1&select=id"
