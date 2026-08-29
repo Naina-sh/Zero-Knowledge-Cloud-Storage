@@ -1,0 +1,28 @@
+name: Supabase Diagnose (TEMP)
+
+# Temporary diagnostic — run once via workflow_dispatch, paste output to me,
+# then this file will be deleted. Prints ONLY non-sensitive metadata about
+# the SUPABASE_ANON_KEY secret (empty? length? format class?) and the HTTP
+# response body. It NEVER prints the secret value or request headers.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Safe diagnostics (no secret printed)
+        env:
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          echo "secret_is_empty: $([[ -z "$SUPABASE_ANON_KEY" ]] && echo YES || echo NO)"
+          echo "secret_length: ${#SUPABASE_ANON_KEY}"
+          echo "starts_with_eyJ (legacy JWT anon): $([[ "$SUPABASE_ANON_KEY" == eyJ* ]] && echo YES || echo NO)"
+          echo "starts_with_sb_publishable (new publishable): $([[ "$SUPABASE_ANON_KEY" == sb_publishable* ]] && echo YES || echo NO)"
+          echo "starts_with_sb_secret (new secret, must NOT be used): $([[ "$SUPABASE_ANON_KEY" == sb_secret* ]] && echo YES || echo NO)"
+          echo "--- Response body (request headers NOT shown) ---"
+          curl -s --max-time 30 \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            "https://ccjywaavkfueaxefkbez.supabase.co/rest/v1/keepalive?id=eq.1&select=id" \
+            -w "\nHTTP_STATUS:%{http_code}\n" || true
