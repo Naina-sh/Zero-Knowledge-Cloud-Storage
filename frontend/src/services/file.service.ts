@@ -168,7 +168,11 @@ export async function semanticSearch(
   const response = await api.post<ApiResponse<{ results: SearchResult[] }>>('/search', {
     queryEmbedding,
     topK,
-    threshold: 0.3,
+    // MiniLM query→document similarity typically lands in 0.1–0.45 even for
+    // strong matches; 0.3 filtered out valid results (verified empirically
+    // against stored vectors — see search diagnostic). 0.1 keeps obvious noise
+    // out while returning real matches, ranked best-first.
+    threshold: 0.1,
     encryptedQuery,
     queryIv,
   });
